@@ -1,0 +1,2539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VERA — Verified Equilibrium Rating Algorithm</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --ink: #12151C;
+    --ink-side: #171B24;
+    --ink-2: #1D212C;
+    --ink-3: #232838;
+    --parchment: #E8E4D9;
+    --parchment-dim: #9B9689;
+    --parchment-faint: #5C594F;
+    --teal: #4FB8A6;
+    --teal-dim: #2E7A6E;
+    --line: #2C3142;
+    --na: #4A4638;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { background: var(--ink-side); }
+
+  body {
+    color: var(--parchment);
+    font-family: 'Inter', sans-serif;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  .page-bg {
+    background: var(--ink);
+    max-width: 920px;
+    margin: 0 auto;
+    min-height: 100vh;
+    position: relative;
+  }
+  .page-bg::before {
+    content: '';
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--fisheye-focus-y, 50%);
+    height: 1px;
+    pointer-events: none;
+    z-index: 0;
+    background: radial-gradient(ellipse 700px 260px at center, rgba(79,184,166,0.05) 0%, transparent 70%);
+    transform: translateY(-50%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  body.scroll-fade-active .page-bg::before { opacity: 1; }
+
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- MASTHEAD ---------- */
+  header.masthead {
+    border-bottom: 1px solid var(--line);
+    padding: 48px 0 28px;
+  }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 14px;
+    cursor: pointer;
+    display: inline-block;
+  }
+  h1.title {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: clamp(32px, 5vw, 52px);
+    letter-spacing: -0.01em;
+    color: var(--parchment);
+    cursor: pointer;
+  }
+  h1.title em {
+    font-style: italic;
+    color: var(--teal);
+    font-weight: 400;
+  }
+
+  /* ---------- LIST ---------- */
+  .list { padding: 20px 0 40px; perspective: 900px; }
+
+  .row {
+    background: var(--ink);
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+    position: relative;
+    z-index: 1;
+  }
+  .row:hover { background: var(--ink-2); z-index: 2; }
+  .row.na { cursor: default; }
+
+  .row-inner {
+    display: grid;
+    grid-template-columns: 50px 58px 1fr 90px;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 4px;
+    background: var(--ink);
+    transition: opacity 0.15s ease-out, transform 0.15s ease-out, background 0.15s;
+    transform-origin: center center;
+    will-change: opacity, transform;
+  }
+  .row:hover .row-inner { background: var(--ink-2); }
+  /* Hover color pop -- title, English subtitle, score, and member count
+     all shift to a richer/brighter version of their normal color.
+     Deliberately no rule here targets .season-winter/.season-spring/
+     .season-summer/.season-fall: those keep their season color exactly
+     as-is on hover, since overriding them would defeat the whole point
+     of color-coding the release season. */
+  .row:hover .title-name { color: #FFFDF7; }
+  .row:hover .title-name-en { color: var(--parchment); }
+  .row:hover .score:not(.na) { color: #6FD4C2; }
+  .row:hover .vote-count { color: var(--parchment-dim); }
+  .row.na .row-inner { opacity: 0.55; }
+
+  .row-thumb-cell { display: flex; align-items: center; }
+  .row-thumb {
+    width: 44px;
+    height: 44px;
+    object-fit: cover;
+    border-radius: 0;
+    display: block;
+    background: var(--ink-3);
+  }
+  .thumb-placeholder {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    background: var(--ink-3);
+    color: var(--parchment-faint);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+  }
+  .row-thumb.thumb-placeholder { font-size: 20px; }
+
+  .rank-cell {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+  }
+  .rank {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--parchment-faint);
+    text-align: left;
+  }
+  .rank.top { color: var(--teal); font-weight: 800; }
+  .mal-icon-link {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--parchment-faint);
+    text-decoration: none;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 2px 4px;
+    line-height: 1.5;
+    flex-shrink: 0;
+  }
+  .mal-icon-link:hover { color: var(--teal); border-color: var(--teal-dim); }
+
+  .title-cell { min-width: 0; }
+  .title-name {
+    font-family: 'Fraunces', serif;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--parchment);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.15s ease-out;
+  }
+  .title-name-en {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    color: var(--parchment-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+    transition: color 0.15s ease-out;
+  }
+  .title-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--parchment-faint);
+    margin-top: 3px;
+    display: flex;
+    gap: 10px;
+  }
+  /* Season-colored release year -- winter/spring/summer/fall, matching
+     each season's real-world feel rather than the site's teal accent,
+     so the year itself becomes a quick visual signal of when a title
+     released without needing to read the number. */
+  .season-winter { color: #6FA8DC; font-weight: 600; }
+  .season-spring { color: #E8A0C4; font-weight: 600; }
+  .season-summer { color: #E8934A; font-weight: 600; }
+  .season-fall { color: #D97B2E; font-weight: 600; }
+
+  .status-pill {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--line);
+    letter-spacing: 0.03em;
+  }
+  .status-pill.airing { color: var(--teal); border-color: var(--teal-dim); }
+  .status-pill.mal-link {
+    color: var(--teal);
+    border-color: var(--teal-dim);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .status-pill.mal-link:hover { background: var(--teal-dim); color: var(--parchment); }
+
+  .score-cell { text-align: right; }
+  .score {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--teal);
+    line-height: 1.1;
+    transition: color 0.15s ease-out;
+  }
+  .score.na {
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--na);
+  }
+  .vote-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--parchment-faint);
+    margin-top: 4px;
+    transition: color 0.15s ease-out;
+  }
+
+  /* ---------- PAGINATION ---------- */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 24px 0 12px;
+    flex-wrap: wrap;
+  }
+  .page-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--parchment-dim);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 7px 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, transform 0.15s;
+  }
+  .page-btn:hover:not(:disabled) { border-color: var(--teal-dim); color: var(--parchment); transform: scale(1.08); }
+  .page-btn:active:not(:disabled) { transform: scale(0.95); }
+  .page-btn:disabled { opacity: 0.3; cursor: default; }
+  .page-btn.active {
+    background: var(--teal);
+    border-color: var(--teal);
+    color: var(--ink);
+    font-weight: 700;
+  }
+  .page-btn.active:hover { transform: scale(1.08); }
+  .page-ellipsis { color: var(--parchment-faint); font-size: 12px; padding: 0 4px; }
+
+  .range-label {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--parchment-faint);
+    padding-bottom: 24px;
+  }
+
+  .back-to-top-btn {
+    position: fixed;
+    bottom: 22px;
+    left: 22px;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--ink);
+    background: var(--teal);
+    border: 1px solid var(--teal);
+    cursor: pointer;
+    box-shadow: 0 8px 20px rgba(79,184,166,0.35);
+    z-index: 30;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(10px) scale(0.9);
+    transition: opacity 0.2s, transform 0.2s, background 0.15s, box-shadow 0.15s;
+  }
+  .back-to-top-btn.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+  }
+  .back-to-top-btn:hover {
+    background: #6FD4C2;
+    box-shadow: 0 10px 26px rgba(79,184,166,0.5);
+    transform: scale(1.1);
+  }
+  .back-to-top-btn.visible:hover { transform: scale(1.1); }
+  .back-to-top-btn:active { transform: scale(0.92); }
+  .back-to-top-btn.popping {
+    animation: backToTopPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes backToTopPop {
+    0%   { transform: scale(1); }
+    35%  { transform: scale(0.82); }
+    65%  { transform: scale(1.18); }
+    100% { transform: scale(1); }
+  }
+
+  /* ---------- DETAIL PAGE ---------- */
+  .back-link {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 32px 0 24px;
+    padding: 9px 18px 9px 14px;
+    background: var(--teal);
+    border: 1px solid var(--teal);
+    border-radius: 999px;
+    box-shadow: 0 4px 14px rgba(79,184,166,0.25);
+    transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
+  }
+  .back-link-arrow { font-size: 15px; line-height: 1; }
+  .back-link:hover { background: #6FD4C2; box-shadow: 0 6px 18px rgba(79,184,166,0.4); transform: scale(1.05); }
+  .back-link:active { transform: scale(0.97); }
+
+  .detail-hero {
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--line);
+  }
+  .detail-title {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: clamp(28px, 4.5vw, 44px);
+    line-height: 1.15;
+    color: var(--parchment);
+    margin-bottom: 6px;
+  }
+  .detail-title-en {
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    color: var(--parchment-dim);
+    margin-bottom: 18px;
+  }
+  .detail-pills { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+
+  .detail-score-block {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 28px;
+    flex-wrap: wrap;
+  }
+  .detail-thumb-wrap { margin-left: auto; }
+  .detail-thumb {
+    width: auto;
+    height: auto;
+    max-width: 140px;
+    max-height: 190px;
+    object-fit: contain;
+    border-radius: 0;
+    display: block;
+    background: var(--ink-3);
+  }
+  .detail-thumb.thumb-placeholder {
+    width: 120px;
+    height: 120px;
+    font-size: 42px;
+  }
+
+  .synopsis-toggle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--teal);
+    cursor: pointer;
+    padding: 6px 12px 6px 10px;
+    border: 1px solid var(--teal-dim);
+    border-radius: 999px;
+    transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.15s;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .synopsis-toggle::before {
+    content: '+';
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .synopsis-toggle.open::before { content: '−'; transform: rotate(180deg); }
+  .synopsis-toggle:hover { background: var(--teal-dim); color: var(--parchment); border-color: var(--teal); transform: translateY(-1px); }
+  .synopsis-toggle:active { transform: translateY(0px) scale(0.97); }
+  .synopsis-toggle.open { background: var(--teal); color: var(--ink); font-weight: 700; border-color: var(--teal); }
+
+  .synopsis-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .synopsis-panel.open { max-height: 400px; }
+  .synopsis-text {
+    font-family: 'Inter', sans-serif;
+    font-size: 13.5px;
+    line-height: 1.75;
+    color: var(--parchment-dim);
+    padding: 18px 0 10px;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.3s ease 0.08s, transform 0.3s ease 0.08s;
+  }
+  .synopsis-panel.open .synopsis-text { opacity: 1; transform: translateY(0); }
+  .synopsis-collapse {
+    text-align: center;
+    color: var(--parchment-faint);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 4px 0 16px;
+    transition: color 0.15s, transform 0.15s;
+  }
+  .synopsis-collapse:hover { color: var(--teal); transform: translateY(2px); }
+
+  .toggle-btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .stats-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .stats-panel.open { max-height: 600px; }
+  .stats-panel > .detail-grid {
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 0.35s ease 0.1s, transform 0.35s ease 0.1s;
+  }
+  .stats-panel.open > .detail-grid {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .collapsible-heading {
+    cursor: pointer;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--ink-2);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 9px 10px 9px 16px;
+    transition: border-color 0.18s, background 0.18s, transform 0.15s;
+    font-size: 15px;
+  }
+  .collapsible-heading:hover { border-color: var(--teal-dim); background: var(--ink-3); transform: translateY(-1px); }
+  .collapsible-heading:active { transform: translateY(0px) scale(0.98); }
+  .collapsible-heading.open { border-color: var(--teal-dim); }
+  .collapsible-heading::after {
+    content: '+';
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--teal-dim);
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.18s;
+  }
+  .collapsible-heading.open::after {
+    content: '−';
+    background: var(--teal);
+    transform: rotate(180deg);
+  }
+
+  .earned-panel, .related-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .earned-panel.open { max-height: 260px; margin-top: 14px; }
+  .related-panel.open { max-height: 900px; margin-top: 14px; }
+
+  .earned-panel > *, .related-panel > .related-list {
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 0.35s ease 0.1s, transform 0.35s ease 0.1s;
+  }
+  .earned-panel.open > *, .related-panel.open > .related-list {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .detail-score {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 56px;
+    font-weight: 700;
+    color: var(--teal);
+    line-height: 1;
+  }
+  .detail-score.na { color: var(--na); font-size: 40px; }
+  .detail-score-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--parchment-faint);
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 32px 0;
+  }
+  .stat-cell {
+    background: var(--ink-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px 20px;
+    transition: border-color 0.15s;
+  }
+  .stat-cell:hover { border-color: var(--teal-dim); }
+  .stat-cell.link-cell { cursor: pointer; }
+  .stat-cell.link-cell:hover { border-color: var(--teal); }
+  .stat-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--parchment-faint);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--parchment);
+  }
+  .stat-value.teal { color: var(--teal); }
+  .stat-value.stat-completed { color: #4FB8A6; }
+  .stat-value.stat-watching { color: #D9A441; }
+  .stat-value.stat-onhold { color: #7C8AA8; }
+  .stat-value.stat-dropped { color: #C9695B; }
+  .stat-value.stat-plantowatch { color: #9B85C4; }
+  .mal-arrow { color: var(--teal); font-size: 12px; }
+
+  .detail-section { padding: 8px 0 32px; }
+  .detail-section h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 18px;
+    color: var(--parchment);
+    margin-bottom: 14px;
+  }
+  .detail-section h2.collapsible-heading { margin-bottom: 0; }
+  .detail-weight-track {
+    height: 8px;
+    background: var(--ink-3);
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    margin-bottom: 8px;
+  }
+  .detail-weight-fill { height: 100%; background: var(--teal); }
+  .weight-explain {
+    font-size: 13px;
+    color: var(--parchment-dim);
+    line-height: 1.7;
+    max-width: 60ch;
+  }
+  .vera-inline-link {
+    color: var(--teal);
+    opacity: 0.75;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: var(--teal-dim);
+    text-underline-offset: 2px;
+    transition: opacity 0.15s;
+  }
+  .vera-inline-link:hover { opacity: 1; }
+
+  .score-dist { display: flex; align-items: flex-end; gap: 6px; height: 116px; margin-top: 10px; }
+  .dist-bar-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  .dist-bar {
+    width: 100%;
+    background: var(--teal-dim);
+    border-radius: 2px 2px 0 0;
+    transition: background 0.12s;
+  }
+  .dist-bar-wrap:hover .dist-bar,
+  .dist-bar-wrap.dist-hover .dist-bar {
+    background: var(--teal);
+  }
+  .dist-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--parchment-faint); }
+  .dist-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--teal);
+    height: 14px;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  .dist-bar-wrap:hover .dist-count,
+  .dist-bar-wrap.dist-hover .dist-count {
+    opacity: 1;
+  }
+
+  /* ---------- RELATED ENTRIES ---------- */
+  .related-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .related-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 18px;
+    flex-wrap: wrap;
+    transition: background 0.15s;
+  }
+  /* In our loaded VERA database: lighter, clickable, jumps to that
+     title's page (replaces the old separate "View in VERA" button --
+     the whole row does that job now). */
+  .related-row-linked {
+    background: var(--ink-2);
+    cursor: pointer;
+  }
+  .related-row-linked:hover { background: var(--ink-3); }
+  /* Not in our loaded database (or manga, which VERA never ranks):
+     a faint diagonal hatch marks it as "external only" without being
+     loud about it. Not clickable as a row -- only the MAL link works. */
+  .related-row-external {
+    background: repeating-linear-gradient(
+      135deg,
+      var(--ink) 0px, var(--ink) 7px,
+      var(--ink-2) 7px, var(--ink-2) 8px
+    );
+  }
+  .related-thumb-cell { display: flex; align-items: center; flex-shrink: 0; }
+  .related-thumb {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 0;
+    display: block;
+    background: var(--ink-3);
+  }
+  .related-thumb.thumb-placeholder { font-size: 18px; }
+  .related-info { min-width: 0; flex: 1; }
+  .related-relation {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 4px;
+  }
+  .related-name {
+    font-family: 'Fraunces', serif;
+    font-size: 15px;
+    color: var(--parchment);
+  }
+  .related-type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--parchment-faint);
+    text-transform: capitalize;
+    margin-top: 2px;
+  }
+  .related-score {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    flex-shrink: 0;
+    padding: 3px 9px;
+    border-radius: 6px;
+  }
+  .related-score-vera { color: var(--teal); background: rgba(79,184,166,0.12); }
+  .related-score-mal { color: #D9A441; background: rgba(217,164,65,0.12); }
+  .related-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .related-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--parchment-dim);
+    background: var(--ink-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 5px 9px;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .related-row-linked .related-btn { background: var(--ink-3); }
+  .related-btn:hover { border-color: var(--teal-dim); color: var(--parchment); }
+
+  .dateline-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    margin-top: 22px;
+    flex-wrap: wrap;
+  }
+  .dateline {
+    display: flex;
+    gap: 28px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--parchment-faint);
+    flex-wrap: wrap;
+    padding-top: 9px;
+  }
+  .dateline strong { color: var(--parchment-dim); font-weight: 500; }
+
+  .header-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 9px;
+  }
+  .rank-mode-toggle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--teal);
+    background: var(--ink-2);
+    border: 1.5px solid var(--teal-dim);
+    border-radius: 999px;
+    padding: 7px 14px 7px 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: border-color 0.15s, color 0.15s, background 0.15s, transform 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
+    box-shadow: 0 2px 10px rgba(79,184,166,0.12);
+  }
+  .rank-mode-toggle::before {
+    content: '⇄';
+    font-size: 13px;
+    line-height: 1;
+  }
+  .rank-mode-toggle:hover {
+    border-color: var(--teal);
+    color: var(--parchment);
+    background: var(--teal-dim);
+    transform: scale(1.06);
+    box-shadow: 0 4px 16px rgba(79,184,166,0.28);
+  }
+  .rank-mode-toggle:active { transform: scale(0.96); }
+  .rank-mode-toggle.active {
+    background: var(--teal);
+    border-color: var(--teal);
+    color: var(--ink);
+  }
+  .rank-mode-toggle.active:hover { background: #6FD4C2; color: var(--ink); }
+
+  .search-wrap {
+    position: relative;
+    width: 260px;
+    max-width: 100%;
+  }
+  .search-input {
+    width: 100%;
+    background: var(--ink-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 9px 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--parchment);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .search-input::placeholder { color: var(--parchment-faint); }
+  .search-input:focus { border-color: var(--teal-dim); }
+
+  .search-results {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: var(--ink-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    max-height: 340px;
+    overflow-y: auto;
+    z-index: 20;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.4);
+  }
+  .search-results.open { display: block; }
+
+  .search-result-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--line);
+  }
+  .search-result-item:last-child { border-bottom: none; }
+  .search-result-item:hover { background: var(--ink-3); }
+  .sr-title {
+    font-family: 'Fraunces', serif;
+    font-size: 13px;
+    color: var(--parchment);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sr-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--parchment-faint);
+    white-space: nowrap;
+  }
+  .sr-score {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--teal);
+    flex-shrink: 0;
+  }
+  .search-no-results {
+    padding: 14px;
+    font-size: 12px;
+    color: var(--parchment-faint);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ---------- EMPTY STATE / DROP ZONE ---------- */
+  .empty-state {
+    border: 2px dashed var(--line);
+    border-radius: 14px;
+    padding: 56px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    margin: 24px 0;
+  }
+  .empty-state:hover, .empty-state.drag-over {
+    border-color: var(--teal-dim);
+    background: var(--ink-2);
+  }
+  .empty-icon {
+    font-size: 32px;
+    color: var(--teal);
+    margin-bottom: 12px;
+  }
+  .empty-title {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    color: var(--parchment);
+    margin-bottom: 6px;
+  }
+  .empty-sub {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--parchment-faint);
+    max-width: 40ch;
+    margin: 0 auto;
+  }
+
+  /* ---------- UPDATE DATABASE BUTTON ---------- */
+  .update-db-btn {
+    position: fixed;
+    bottom: 22px;
+    right: 22px;
+    background: var(--ink-2);
+    border: 1px solid var(--line);
+    color: var(--parchment-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+    transition: border-color 0.15s, color 0.15s;
+    z-index: 30;
+  }
+  .update-db-btn:hover { border-color: var(--teal-dim); color: var(--parchment); }
+
+  /* ---------- MODALS ---------- */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 20px;
+  }
+  .modal-box {
+    background: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    width: 100%;
+    max-width: 440px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+  }
+  .modal-box-wide { max-width: 640px; }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--line);
+  }
+  .modal-title {
+    font-family: 'Fraunces', serif;
+    font-size: 17px;
+    color: var(--parchment);
+  }
+  .modal-close {
+    cursor: pointer;
+    color: var(--parchment-faint);
+    font-size: 14px;
+    padding: 4px 8px;
+  }
+  .modal-close:hover { color: var(--parchment); }
+  .modal-body { padding: 22px; }
+
+  .update-status {
+    margin-top: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--parchment-dim);
+    text-align: center;
+    min-height: 18px;
+  }
+  .update-status.success { color: var(--teal); }
+  .update-status.error { color: #C97B63; }
+
+  .methodology-body {
+    font-family: 'Inter', sans-serif;
+    font-size: 13.5px;
+    color: var(--parchment-dim);
+    line-height: 1.75;
+  }
+  .methodology-body strong { color: var(--parchment); }
+  .methodology-body .formula {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--teal);
+    background: var(--ink-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 16px;
+    text-align: center;
+    letter-spacing: 0.01em;
+    margin-bottom: 20px;
+  }
+
+  .meth-intro { font-size: 14.5px; color: var(--parchment); margin-bottom: 20px; }
+
+  /* Try it on a real title */
+  .meth-try-box {
+    background: var(--ink-2);
+    border: 1px solid var(--teal-dim);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 26px;
+  }
+  .meth-try-label {
+    font-family: 'Fraunces', serif;
+    font-size: 15px;
+    color: var(--parchment);
+    margin-bottom: 3px;
+  }
+  .meth-try-sub { font-size: 12px; color: var(--parchment-faint); margin-bottom: 12px; }
+  .meth-search-wrap { position: relative; }
+  .meth-search-input {
+    width: 100%;
+    background: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--parchment);
+    outline: none;
+    transition: border-color 0.15s;
+    box-sizing: border-box;
+  }
+  .meth-search-input:focus { border-color: var(--teal-dim); }
+  .meth-search-results {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    max-height: 260px;
+    overflow-y: auto;
+    z-index: 5;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.4);
+  }
+  .meth-search-results.open { display: block; }
+
+  .meth-breakdown {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s cubic-bezier(0.16,1,0.3,1);
+  }
+  .meth-breakdown.open { max-height: 500px; margin-top: 16px; }
+  .meth-breakdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .meth-breakdown-title { font-family: 'Fraunces', serif; font-size: 15px; color: var(--parchment); min-width: 0; }
+  .meth-breakdown-scores { display: flex; gap: 14px; flex-shrink: 0; }
+  .meth-breakdown-score-item { text-align: center; }
+  .meth-breakdown-score-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    color: var(--parchment-faint);
+    text-transform: uppercase;
+  }
+  .meth-breakdown-score-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--teal);
+  }
+  .meth-breakdown-score-value.mal { color: #D9A441; }
+  .meth-breakdown-score-value.na { color: var(--na); font-size: 14px; }
+  .meth-weight-track {
+    height: 6px;
+    background: var(--ink-3);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .meth-weight-fill { height: 100%; background: var(--teal); }
+  .meth-weight-caption {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--parchment-faint);
+    margin-top: 6px;
+  }
+  .meth-explainer { font-size: 13px; margin-top: 12px; margin-bottom: 0; }
+  .meth-breakdown-note {
+    font-size: 12px;
+    color: var(--teal);
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+
+  .meth-section-title {
+    font-family: 'Fraunces', serif;
+    font-size: 15px;
+    color: var(--parchment);
+    margin: 26px 0 12px;
+  }
+
+  .meth-var-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .meth-var-card {
+    background: var(--ink-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .meth-var-letter {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--teal);
+    margin-bottom: 4px;
+  }
+  .meth-var-name { font-size: 12.5px; font-weight: 600; color: var(--parchment); margin-bottom: 5px; }
+  .meth-var-desc { font-size: 12px; color: var(--parchment-dim); line-height: 1.6; }
+
+  .meth-plain { margin-bottom: 4px; }
+
+  .meth-protect-list { display: flex; flex-direction: column; gap: 14px; }
+  .meth-protect-row { display: flex; gap: 12px; align-items: flex-start; }
+  .meth-protect-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ink-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  .meth-protect-name { font-size: 13px; font-weight: 600; color: var(--parchment); margin-bottom: 3px; }
+  .meth-protect-desc { font-size: 12.5px; color: var(--parchment-dim); line-height: 1.65; }
+
+  @media (max-width: 640px) {
+    .meth-var-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ---------- FOOTER ---------- */
+  .site-footer {
+    border-top: 1px solid var(--line);
+    padding: 20px 0 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+  .history-link {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--parchment-faint);
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 5px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .history-link:hover { color: var(--teal); background: var(--ink-2); }
+  .footer-divider { color: var(--parchment-faint); font-size: 10px; }
+
+  /* ---------- HISTORY MODAL ---------- */
+  .history-body {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--parchment-dim);
+    line-height: 1.7;
+  }
+  .hist-section-title {
+    font-family: 'Fraunces', serif;
+    font-size: 15px;
+    color: var(--parchment);
+    margin: 0 0 12px;
+  }
+  .hist-credit-list { display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 28px; }
+  .hist-credit-row {
+    display: block;
+    background: var(--ink-2);
+    padding: 12px 14px;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .hist-credit-row:hover { background: var(--ink-3); }
+  .hist-credit-name { font-family: 'Fraunces', serif; font-size: 13.5px; color: var(--teal); margin-bottom: 2px; }
+  .hist-credit-desc { font-size: 12px; color: var(--parchment-dim); line-height: 1.55; }
+
+  .hist-version-list { display: flex; flex-direction: column; gap: 10px; }
+  .hist-version-row {
+    background: var(--ink-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .hist-version-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .hist-version-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    color: var(--teal);
+    background: rgba(79,184,166,0.12);
+    padding: 3px 8px;
+    border-radius: 5px;
+    flex-shrink: 0;
+  }
+  .hist-version-title { font-family: 'Fraunces', serif; font-size: 14px; color: var(--parchment); flex: 1; min-width: 160px; }
+  .hist-version-view-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--parchment-dim);
+    background: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 5px 11px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: border-color 0.15s, color 0.15s, transform 0.15s;
+  }
+  .hist-version-view-btn:hover { border-color: var(--teal-dim); color: var(--parchment); transform: scale(1.05); }
+  .hist-version-desc { font-size: 12.5px; color: var(--parchment-dim); margin-top: 8px; line-height: 1.6; }
+  .hist-version-preview {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s cubic-bezier(0.16,1,0.3,1);
+  }
+  .hist-version-preview.open { max-height: 340px; margin-top: 12px; }
+  .hist-version-preview-inner {
+    background: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px;
+    overflow: auto;
+    max-height: 320px;
+  }
+
+  @media (max-width: 640px) {
+    .row-inner {
+      grid-template-columns: 32px 34px 1fr auto;
+      gap: 6px;
+      padding: 12px 2px;
+    }
+    .row-thumb { width: 32px; height: 32px; border-radius: 0; }
+    .rank-cell { flex-direction: column; align-items: flex-start; gap: 2px; }
+    .rank { font-size: 15px; }
+    .mal-icon-link { padding: 1px 3px; font-size: 9px; }
+    .title-name { font-size: 13.5px; white-space: normal; }
+    .title-name-en { font-size: 11px; white-space: normal; }
+    .title-meta { flex-wrap: wrap; gap: 6px; }
+    .score-cell { min-width: 0; }
+    .score { font-size: 16px; }
+    .score.na { font-size: 12px; }
+    .vote-count { font-size: 9px; white-space: nowrap; }
+    .detail-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="page-bg">
+<div class="wrap">
+  <header class="masthead">
+    <div class="eyebrow" onclick="openMethodology()" title="How VERA scores are calculated">Verified Equilibrium Rating Algorithm</div>
+    <h1 class="title" onclick="goHome()">VERA <em>Rankings</em></h1>
+    <div class="dateline-row">
+      <div class="dateline">
+        <span>Data pulled: <strong id="pull-date">—</strong></span>
+      </div>
+      <div class="header-controls">
+        <button id="rank-mode-toggle" class="rank-mode-toggle" onclick="toggleRankMode()" title="Switch between VERA and MAL ranking">View: MAL rank</button>
+        <div class="search-wrap">
+          <input type="text" id="search-input" class="search-input" placeholder="Search titles…" autocomplete="off" oninput="handleSearchInput()" onfocus="handleSearchInput()">
+          <div id="search-results" class="search-results"></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="view-empty" style="display:none;">
+    <div class="empty-state" id="drop-zone">
+      <div class="empty-icon">⇪</div>
+      <div class="empty-title">No database loaded</div>
+      <div class="empty-sub">Drag a VERA export (.json) here, or click to choose a file.</div>
+      <input type="file" id="file-input" accept=".json" style="display:none;">
+    </div>
+  </div>
+
+  <div id="view-list" style="display:none;">
+    <div class="list" id="list"></div>
+    <div class="pagination" id="pagination"></div>
+    <div class="range-label" id="range-label"></div>
+  </div>
+
+  <div id="view-detail" style="display:none;"></div>
+
+  <footer class="site-footer">
+    <span class="history-link" onclick="openHistory()">History</span>
+    <span class="footer-divider">·</span>
+    <span class="history-link" onclick="openCredits()">Credits</span>
+  </footer>
+
+  </div>
+</div>
+
+<button id="back-to-top-btn" class="back-to-top-btn" onclick="scrollListToTop()" title="Back to top of this page">↑</button>
+
+<button id="update-db-btn" class="update-db-btn" onclick="openUpdateModal()" title="Update database">⇪ Update Database</button>
+
+<div id="history-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this) closeHistory()">
+  <div class="modal-box modal-box-wide">
+    <div class="modal-header">
+      <div class="modal-title">History</div>
+      <div class="modal-close" onclick="closeHistory()">✕</div>
+    </div>
+    <div class="modal-body history-body">
+      <div class="hist-version-list" id="hist-version-list"></div>
+    </div>
+  </div>
+</div>
+
+<div id="credits-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this) closeCredits()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">Credits</div>
+      <div class="modal-close" onclick="closeCredits()">✕</div>
+    </div>
+    <div class="modal-body history-body">
+      <div class="hist-credit-list">
+        <a class="hist-credit-row" href="https://myanimelist.net" target="_blank" rel="noopener">
+          <div class="hist-credit-name">MyAnimeList</div>
+          <div class="hist-credit-desc">The underlying anime database — titles, community stats, cover art, and synopses all originate here.</div>
+        </a>
+        <a class="hist-credit-row" href="https://api.tenrai.org" target="_blank" rel="noopener">
+          <div class="hist-credit-name">Tenrai API</div>
+          <div class="hist-credit-desc">The REST API this project's extraction script calls to pull MyAnimeList data (Jikan v4–compatible).</div>
+        </a>
+        <a class="hist-credit-row" href="https://github.com/gonzyui/tenrai.js" target="_blank" rel="noopener">
+          <div class="hist-credit-name">tenrai.js</div>
+          <div class="hist-credit-desc">A TypeScript client library for the Tenrai API, reviewed during development — this project calls the API directly rather than through it.</div>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="update-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this) closeUpdateModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">Update Database</div>
+      <div class="modal-close" onclick="closeUpdateModal()">✕</div>
+    </div>
+    <div class="modal-body">
+      <div class="empty-state" id="modal-drop-zone">
+        <div class="empty-icon">⇪</div>
+        <div class="empty-title">Drop new VERA export here</div>
+        <div class="empty-sub">Or click to choose a .json file. This replaces the current database, saved locally in this browser.</div>
+        <input type="file" id="modal-file-input" accept=".json" style="display:none;">
+      </div>
+      <div id="update-status" class="update-status"></div>
+    </div>
+  </div>
+</div>
+
+<div id="methodology-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this) closeMethodology()">
+  <div class="modal-box modal-box-wide">
+    <div class="modal-header">
+      <div class="modal-title">How VERA scores are calculated</div>
+      <div class="modal-close" onclick="closeMethodology()">✕</div>
+    </div>
+    <div class="modal-body methodology-body">
+
+      <p class="meth-intro">Every score in the VERA database blends a title's <strong>real vote history</strong> against a <strong>dynamic baseline</strong> — so a brand-new show and a decade-old giant are judged fairly against each other, not by the same fixed rules.</p>
+
+      <div class="meth-try-box">
+        <div class="meth-try-label">Try it on a real title</div>
+        <div class="meth-try-sub">Search any of the 15,200 titles to see exactly how its own score was built.</div>
+        <div class="meth-search-wrap">
+          <input type="text" id="meth-search-input" class="meth-search-input" placeholder="Search titles…" autocomplete="off" oninput="handleMethSearchInput()">
+          <div id="meth-search-results" class="meth-search-results"></div>
+        </div>
+        <div id="meth-breakdown" class="meth-breakdown"></div>
+      </div>
+
+      <div class="meth-section-title">The formula</div>
+      <p class="formula">VERA Score = (W / (W + M)) × S &nbsp;+&nbsp; (M / (W + M)) × C</p>
+
+      <div class="meth-var-grid">
+        <div class="meth-var-card">
+          <div class="meth-var-letter">W</div>
+          <div class="meth-var-name">Weight</div>
+          <div class="meth-var-desc">Real votes behind the title. Completed counts fully; watching, on-hold, dropped, and plan-to-watch count only partially — they're not a finished opinion yet.</div>
+        </div>
+        <div class="meth-var-card">
+          <div class="meth-var-letter">S</div>
+          <div class="meth-var-name">Score</div>
+          <div class="meth-var-desc">The title's own average score, after smoothing away suspicious vote-bombing spikes.</div>
+        </div>
+        <div class="meth-var-card">
+          <div class="meth-var-letter">M</div>
+          <div class="meth-var-name">Baseline weight</div>
+          <div class="meth-var-desc">Large for new or thin titles, shrinking as a title ages and earns more real votes.</div>
+        </div>
+        <div class="meth-var-card">
+          <div class="meth-var-letter">C</div>
+          <div class="meth-var-name">Global average</div>
+          <div class="meth-var-desc">The average score across the whole VERA database — the "neutral" starting point every title leans on until it earns its own weight.</div>
+        </div>
+      </div>
+
+      <p class="meth-plain">In plain terms: a title with millions of real completions is judged almost entirely on its own votes. A title with only a couple hundred votes leans much more on the baseline, since a handful of votes could easily be noise, hype, or a coordinated attack. As real opinions accumulate, a title earns the right to be judged more and more on its own merit.</p>
+
+      <div class="meth-section-title">Built-in protections</div>
+
+      <div class="meth-protect-list">
+        <div class="meth-protect-row">
+          <div class="meth-protect-icon">🛡</div>
+          <div>
+            <div class="meth-protect-name">Anti-bombing smoothing</div>
+            <div class="meth-protect-desc">If the 1s or 10s bucket spikes far above what the surrounding score distribution would predict, that spike is capped before the average is calculated — blunting coordinated vote-bombing without touching genuine, organically extreme opinions.</div>
+          </div>
+        </div>
+        <div class="meth-protect-row">
+          <div class="meth-protect-icon">📡</div>
+          <div>
+            <div class="meth-protect-name">Airing-title caution</div>
+            <div class="meth-protect-desc">Currently-airing titles get an extra, time-decaying penalty proportional to how much of their vote weight is still speculative (watching, not completed) — this fades the longer a show airs and the more of its audience actually finishes it.</div>
+          </div>
+        </div>
+        <div class="meth-protect-row">
+          <div class="meth-protect-icon">📊</div>
+          <div>
+            <div class="meth-protect-name">Minimum data floor</div>
+            <div class="meth-protect-desc">Titles under 100 members are marked N/A — there simply isn't enough data for a meaningful score. They're still listed, sorted by member count, but excluded from the numbered ranking.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+let VERA_PAYLOAD = null;
+
+const PAGE_SIZE = 50;
+let currentPage = 1;
+let titlesById = {};
+let rankMode = 'vera'; // 'vera' or 'mal' -- toggled by the header button
+
+function formatNum(n) {
+  if (n === null || n === undefined) return '—';
+  return n.toLocaleString('en-US');
+}
+
+function seasonYearHtml(title, airedYear) {
+  if (airedYear === '—') return airedYear;
+  const seasonClass = {
+    winter: 'season-winter',
+    spring: 'season-spring',
+    summer: 'season-summer',
+    fall: 'season-fall',
+  }[title.season];
+  // Unknown/null season (e.g. movies, specials MAL doesn't slot into a
+  // season): fall back to the plain, uncolored year rather than
+  // guessing -- an incorrect season color would be worse than none.
+  if (!seasonClass) return airedYear;
+  return `<span class="${seasonClass}" title="${title.season.charAt(0).toUpperCase() + title.season.slice(1)} ${airedYear}">${airedYear}</span>`;
+}
+
+function formatPullDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function weightShare(title) {
+  const total = title.total_entries || 1;
+  const completed = title.completed || 0;
+  return Math.min(1, completed / total);
+}
+
+function thumbHtml(title, sizeClass, preferFull) {
+  const url = preferFull
+    ? (title.image_url || title.image_small_url)
+    : (title.image_small_url || title.image_url);
+  if (url) {
+    return `<img class="${sizeClass} lazy-img" data-src="${url}" alt="" onerror="this.replaceWith(placeholderEl('${sizeClass}'))">`;
+  }
+  return placeholderHtml(sizeClass);
+}
+
+function placeholderHtml(sizeClass) {
+  return `<div class="${sizeClass} thumb-placeholder">?</div>`;
+}
+
+function placeholderEl(sizeClass) {
+  const el = document.createElement('div');
+  el.className = sizeClass + ' thumb-placeholder';
+  el.textContent = '?';
+  return el;
+}
+
+/* ---------- Explicit scroll-triggered image loading ----------
+   Native loading="lazy" leaves the "how close to the viewport"
+   threshold up to the browser, which by default pre-loads a fairly
+   generous margin ahead -- on a 50-row page that can look like a big
+   batch downloading at once rather than a tight per-image trickle.
+   Using our own IntersectionObserver gives explicit control: an
+   image's real src is only set once it's actually within ~120px of
+   entering the viewport, one image at a time as you scroll. */
+let lazyObserver = null;
+function getLazyObserver() {
+  if (lazyObserver) return lazyObserver;
+  lazyObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const img = entry.target;
+        const src = img.getAttribute('data-src');
+        if (src) {
+          img.src = src;
+          img.removeAttribute('data-src');
+        }
+        lazyObserver.unobserve(img);
+      }
+    });
+  }, { root: null, rootMargin: '120px 0px', threshold: 0.01 });
+  return lazyObserver;
+}
+
+function wireLazyImages(container) {
+  const observer = getLazyObserver();
+  container.querySelectorAll('img.lazy-img[data-src]').forEach(img => observer.observe(img));
+}
+
+/* ---------- Scroll-fade "focus zone" effect ----------
+   Rows near the vertical center of the viewport are fully visible.
+   Rows further toward the top or bottom edge fade down to a dimmed
+   ~30% opacity, so attention naturally follows whatever's centered as
+   the person scrolls. Runs only while the list view is showing --
+   never on the detail page, and the Update Database button sits
+   outside #list entirely so it's never touched by this.
+
+   Fish-eye layer: on top of the existing fade/scale, rows also tilt
+   in 3D (rotateX) and push toward/away from the viewer (translateZ),
+   signed by whether the row sits above or below center -- rows above
+   tilt one way, rows below tilt the other, the way a wide/fisheye
+   lens bows a flat plane around its focal point. Requires
+   perspective on the .list container (set once, not per-row). */
+const FADE_MIN_OPACITY = 0.3;
+const SCALE_MAX = 1.06;   // centered row grows slightly larger
+const SCALE_MIN = 0.92;   // edge rows shrink slightly smaller
+const FISHEYE_MAX_ROTATE = 10;   // degrees, at the falloff edge
+const FISHEYE_MAX_Z = -70;       // px, how far edge rows push back away from viewer
+let scrollFadeActive = false;
+let scrollFadeRAF = null;
+
+const HOVER_SCALE_BONUS = 1.035; // extra pop on top of whatever scroll-scale a row already has
+
+function applyScrollFade() {
+  scrollFadeRAF = null;
+  const rows = document.querySelectorAll('#list .row');
+  if (!rows.length) return;
+  const viewportH = window.innerHeight;
+  const centerY = viewportH / 2;
+  const falloffDistance = viewportH * 0.62; // how far from center until fully dimmed/shrunk
+
+  document.documentElement.style.setProperty('--fisheye-focus-y', `${centerY}px`);
+
+  const backToTopBtn = document.getElementById('back-to-top-btn');
+  if (backToTopBtn) {
+    backToTopBtn.classList.toggle('visible', window.scrollY > viewportH * 0.5);
+  }
+
+  rows.forEach(row => {
+    const inner = row.querySelector('.row-inner');
+    if (!inner) return;
+    const rect = row.getBoundingClientRect();
+    const rowCenter = rect.top + rect.height / 2;
+    const signedOffset = rowCenter - centerY; // negative = above center, positive = below
+    const distance = Math.abs(signedOffset);
+    const t = Math.min(1, distance / falloffDistance);
+    const fadeOpacity = 1 - t * (1 - FADE_MIN_OPACITY);
+    // Inline styles override the CSS .row.na rule entirely, so N/A
+    // dimming must be reapplied here explicitly once scroll-fade starts
+    // touching this element's opacity, or N/A rows would lose their
+    // dimming the moment they're first touched by the scroll handler.
+    const baseOpacity = row.classList.contains('na') ? 0.55 : 1;
+    inner.style.opacity = (fadeOpacity * baseOpacity).toFixed(3);
+
+    const scrollScale = SCALE_MAX - t * (SCALE_MAX - SCALE_MIN);
+    // Hover bonus multiplies on top of the scroll-driven scale rather
+    // than a separate CSS :hover{transform} rule, since this script
+    // sets transform inline on every scroll tick -- inline styles
+    // always win over a stylesheet :hover rule, so a plain CSS hover
+    // scale would get silently overwritten the moment scroll-fade next
+    // ran. Tracking hover here keeps both effects composing correctly.
+    const hoverScale = row.classList.contains('row-hovered') ? HOVER_SCALE_BONUS : 1;
+    const finalScale = scrollScale * hoverScale;
+
+    // Fish-eye: sign of the tilt follows which side of center the row
+    // is on, so rows above and below bow away from the viewer in
+    // opposite directions, curving around the centered focal row
+    // (which gets rotateX(0), translateZ(0) -- no distortion at all).
+    const direction = signedOffset < 0 ? 1 : -1;
+    const rotateX = direction * t * FISHEYE_MAX_ROTATE;
+    const translateZ = t * FISHEYE_MAX_Z;
+
+    inner.style.transform =
+      `perspective(900px) rotateX(${rotateX.toFixed(2)}deg) translateZ(${translateZ.toFixed(1)}px) scale(${finalScale.toFixed(3)})`;
+  });
+}
+
+function wireRowHoverPop(container) {
+  container.querySelectorAll('.row').forEach(row => {
+    row.addEventListener('mouseenter', () => {
+      row.classList.add('row-hovered');
+      if (scrollFadeActive) applyScrollFade(); else applyHoverOnly(row, true);
+    });
+    row.addEventListener('mouseleave', () => {
+      row.classList.remove('row-hovered');
+      if (scrollFadeActive) applyScrollFade(); else applyHoverOnly(row, false);
+    });
+  });
+}
+
+function applyHoverOnly(row, isHovering) {
+  // Fallback path for when scroll-fade isn't active (e.g. a very short
+  // list that never scrolls) -- still gives the hover pop.
+  const inner = row.querySelector('.row-inner');
+  if (!inner) return;
+  inner.style.transform = isHovering ? `scale(${HOVER_SCALE_BONUS})` : '';
+}
+
+function onScrollFadeTick() {
+  if (!scrollFadeActive) return;
+  if (scrollFadeRAF) return;
+  scrollFadeRAF = requestAnimationFrame(applyScrollFade);
+}
+
+function enableScrollFade() {
+  scrollFadeActive = true;
+  document.body.classList.add('scroll-fade-active');
+  window.addEventListener('scroll', onScrollFadeTick, { passive: true });
+  window.addEventListener('resize', onScrollFadeTick, { passive: true });
+  applyScrollFade();
+}
+
+function disableScrollFade() {
+  scrollFadeActive = false;
+  document.body.classList.remove('scroll-fade-active');
+  window.removeEventListener('scroll', onScrollFadeTick);
+  window.removeEventListener('resize', onScrollFadeTick);
+  if (scrollFadeRAF) {
+    cancelAnimationFrame(scrollFadeRAF);
+    scrollFadeRAF = null;
+  }
+  const backToTopBtn = document.getElementById('back-to-top-btn');
+  if (backToTopBtn) backToTopBtn.classList.remove('visible');
+  // Reset any rows left mid-fade so the detail page never inherits a
+  // dimmed/scaled state, and so re-entering the list starts clean.
+  // Clearing inline styles here also lets .row.na's CSS rule (0.55
+  // opacity) take back over cleanly for N/A rows.
+  document.querySelectorAll('#list .row-inner').forEach(inner => {
+    inner.style.opacity = '';
+    inner.style.transform = '';
+  });
+}
+
+function renderRow(title, displayRank) {
+  const isMalMode = rankMode === 'mal';
+  const isNA = isMalMode
+    ? (title.mal_score === null || title.mal_score === undefined)
+    : (title.vera_score === null || title.vera_score === undefined);
+
+  const airedYear = title.aired_from ? title.aired_from.slice(0, 4) : '—';
+  const statusShort = title.status === 'Currently Airing' ? 'Airing' : 'Finished';
+  const statusClass = title.status === 'Currently Airing' ? 'status-pill airing' : 'status-pill';
+
+  const rankClass = (!isNA && displayRank <= 3) ? 'rank top' : 'rank';
+  const rankDisplay = isNA ? '—' : ('#' + displayRank);
+
+  const scoreDisplay = isNA ? 'N/A' : (isMalMode ? title.mal_score.toFixed(2) : title.vera_score.toFixed(2));
+
+  return `
+    <div class="row ${isNA ? 'na' : ''}" ${isNA ? '' : `onclick="goDetail(${title.mal_id})"`}>
+      <div class="row-inner">
+        <div class="row-thumb-cell">${thumbHtml(title, 'row-thumb')}</div>
+        <div class="rank-cell">
+          <div class="${rankClass}">${rankDisplay}</div>
+          <a class="mal-icon-link" href="https://myanimelist.net/anime/${title.mal_id}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="View on MyAnimeList">↗</a>
+        </div>
+        <div class="title-cell">
+          <div class="title-name">${title.title}</div>
+          ${title.title_english && title.title_english !== title.title ? `<div class="title-name-en">${title.title_english}</div>` : ''}
+          <div class="title-meta">
+            <span class="${statusClass}">${statusShort}</span>
+            <span>${seasonYearHtml(title, airedYear)}</span>
+          </div>
+        </div>
+        <div class="score-cell">
+          <div class="score ${isNA ? 'na' : ''}">${scoreDisplay}</div>
+          <div class="vote-count">${formatNum(title.total_entries)} members</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+let malSortedTitles = null; // lazily computed, cached until data changes
+
+function getOrderedTitles() {
+  if (rankMode === 'vera') return VERA_PAYLOAD.titles;
+  if (!malSortedTitles) {
+    const ranked = VERA_PAYLOAD.titles.filter(t => t.mal_score !== null && t.mal_score !== undefined);
+    const unranked = VERA_PAYLOAD.titles.filter(t => t.mal_score === null || t.mal_score === undefined);
+    ranked.sort((a, b) => b.mal_score - a.mal_score);
+    unranked.sort((a, b) => (b.total_entries || 0) - (a.total_entries || 0));
+    malSortedTitles = [...ranked, ...unranked];
+  }
+  return malSortedTitles;
+}
+
+function getDisplayRank(title, indexInOrderedList) {
+  const isNA = rankMode === 'mal'
+    ? (title.mal_score === null || title.mal_score === undefined)
+    : (title.vera_score === null || title.vera_score === undefined);
+  return isNA ? null : indexInOrderedList + 1;
+}
+
+function renderPage(page) {
+  currentPage = page;
+  const start = (page - 1) * PAGE_SIZE;
+  const end = start + PAGE_SIZE;
+  const ordered = getOrderedTitles();
+  const slice = ordered.slice(start, end);
+
+  document.getElementById('list').innerHTML = slice
+    .map((t, i) => renderRow(t, getDisplayRank(t, start + i)))
+    .join('');
+  wireLazyImages(document.getElementById('list'));
+  wireRowHoverPop(document.getElementById('list'));
+  if (scrollFadeActive) applyScrollFade();
+
+  const lastIdx = Math.min(end, ordered.length);
+  document.getElementById('range-label').textContent = `Showing ${start + 1}–${lastIdx} of ${ordered.length}`;
+
+  renderPagination();
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
+function renderPagination() {
+  const totalPages = Math.max(1, Math.ceil(VERA_PAYLOAD.titles.length / PAGE_SIZE));
+  const pagEl = document.getElementById('pagination');
+  let html = '';
+
+  html += `<button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="renderPage(${currentPage - 1})">&larr; prev</button>`;
+
+  const pages = [];
+  for (let p = 1; p <= totalPages; p++) {
+    if (p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2) pages.push(p);
+  }
+  let lastShown = 0;
+  for (const p of pages) {
+    if (p - lastShown > 1) html += `<span class="page-ellipsis">···</span>`;
+    html += `<button class="page-btn ${p === currentPage ? 'active' : ''}" onclick="renderPage(${p})">${p}</button>`;
+    lastShown = p;
+  }
+
+  html += `<button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="renderPage(${currentPage + 1})">next &rarr;</button>`;
+  pagEl.innerHTML = html;
+}
+
+function scoreDistribution(title) {
+  const scores = title.scores || [];
+  const max = Math.max(1, ...scores.map(s => s.votes || 0));
+  return scores.map(s => `
+    <div class="dist-bar-wrap">
+      <div class="dist-bar" style="height:${Math.max(2, ((s.votes||0)/max)*80)}px"></div>
+      <div class="dist-label">${s.score}</div>
+      <div class="dist-count">${formatNum(s.votes || 0)}</div>
+    </div>
+  `).join('');
+}
+
+function toggleSynopsis() {
+  const panel = document.getElementById('synopsis-panel');
+  const toggle = document.getElementById('synopsis-toggle');
+  if (!panel) return;
+  panel.classList.toggle('open');
+  if (toggle) toggle.classList.toggle('open');
+}
+
+function toggleStats() {
+  const panel = document.getElementById('stats-panel');
+  const toggle = document.getElementById('stats-toggle');
+  if (!panel) return;
+  panel.classList.toggle('open');
+  if (toggle) toggle.classList.toggle('open');
+}
+
+function toggleEarned() {
+  const panel = document.getElementById('earned-panel');
+  const toggle = document.getElementById('earned-toggle');
+  if (!panel) return;
+  panel.classList.toggle('open');
+  if (toggle) toggle.classList.toggle('open');
+}
+
+function toggleRelated() {
+  const panel = document.getElementById('related-panel');
+  const toggle = document.getElementById('related-toggle');
+  if (!panel) return;
+  panel.classList.toggle('open');
+  if (toggle) toggle.classList.toggle('open');
+}
+
+function renderDetail(malId) {
+  const title = titlesById[malId];
+  if (!title) { goHome(); return; }
+
+  const isMalMode = rankMode === 'mal';
+  const isNA = isMalMode
+    ? (title.mal_score === null || title.mal_score === undefined)
+    : (title.vera_score === null || title.vera_score === undefined);
+  const share = weightShare(title);
+  const sharePct = Math.round(share * 100);
+  const statusClass = title.status === 'Currently Airing' ? 'status-pill airing' : 'status-pill';
+  const airedYear = title.aired_from ? title.aired_from.slice(0, 4) : '—';
+  const scoreDisplay = isNA ? 'N/A' : (isMalMode ? title.mal_score.toFixed(2) : title.vera_score.toFixed(2));
+  const scoreLabel = isMalMode ? 'MAL score' : 'VERA score';
+
+  document.getElementById('view-detail').innerHTML = `
+    <div class="back-link" onclick="goHome()"><span class="back-link-arrow">←</span> All Rankings</div>
+    <div class="detail-hero">
+      <div class="detail-title">${title.title}</div>
+      ${title.title_english && title.title_english !== title.title ? `<div class="detail-title-en">${title.title_english}</div>` : ''}
+      <div class="detail-pills">
+        <span class="status-pill ${title.status === 'Currently Airing' ? 'airing' : ''}">${title.status || '—'}</span>
+        <span class="status-pill">${seasonYearHtml(title, airedYear)}</span>
+        <span class="status-pill">MAL #${title.mal_rank || '—'}</span>
+        <span class="status-pill mal-link" onclick="window.open('https://myanimelist.net/anime/${title.mal_id}', '_blank')">View on MyAnimeList ↗</span>
+      </div>
+      <div class="detail-score-block">
+        <div class="detail-score ${isNA ? 'na' : ''}">${scoreDisplay}</div>
+        <div class="detail-score-label">${scoreLabel}<br>${formatNum(title.total_entries)} members</div>
+        <div class="toggle-btn-group">
+          ${title.synopsis ? `<div class="synopsis-toggle" id="synopsis-toggle" onclick="toggleSynopsis()">Synopsis</div>` : ''}
+          <div class="synopsis-toggle" id="stats-toggle" onclick="toggleStats()">What are you thinking?</div>
+        </div>
+        <div class="detail-thumb-wrap">${thumbHtml(title, 'detail-thumb', true)}</div>
+      </div>
+      ${title.synopsis ? `
+      <div class="synopsis-panel" id="synopsis-panel">
+        <p class="synopsis-text" onclick="toggleSynopsis()">${title.synopsis}</p>
+        <div class="synopsis-collapse" onclick="toggleSynopsis()" title="Collapse">▲</div>
+      </div>` : ''}
+
+      <div class="stats-panel" id="stats-panel">
+        <div class="detail-grid">
+          <div class="stat-cell"><div class="stat-label">Completed</div><div class="stat-value stat-completed">${formatNum(title.completed)}</div></div>
+          <div class="stat-cell"><div class="stat-label">Watching</div><div class="stat-value stat-watching">${formatNum(title.watching)}</div></div>
+          <div class="stat-cell"><div class="stat-label">On hold</div><div class="stat-value stat-onhold">${formatNum(title.on_hold)}</div></div>
+          <div class="stat-cell"><div class="stat-label">Dropped</div><div class="stat-value stat-dropped">${formatNum(title.dropped)}</div></div>
+          <div class="stat-cell"><div class="stat-label">Plan to watch</div><div class="stat-value stat-plantowatch">${formatNum(title.plan_to_watch)}</div></div>
+          <div class="stat-cell link-cell" onclick="window.open('https://myanimelist.net/anime/${title.mal_id}', '_blank')">
+            <div class="stat-label">MAL score <span class="mal-arrow">↗</span></div>
+            <div class="stat-value teal">${title.mal_score ?? '—'}</div>
+          </div>
+        </div>
+        <div class="synopsis-collapse" onclick="toggleStats()" title="Collapse">▲</div>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <h2>Score distribution</h2>
+      <div class="score-dist">${scoreDistribution(title)}</div>
+    </div>
+
+    ${isMalMode ? '' : `
+    <div class="detail-section">
+      <h2 class="collapsible-heading" id="earned-toggle" onclick="toggleEarned()">How earned is this score</h2>
+      <div class="earned-panel" id="earned-panel">
+        <div class="detail-weight-track"><div class="detail-weight-fill" style="width:${sharePct}%"></div></div>
+        <p class="weight-explain">${sharePct}% of this title's weight comes from people who actually completed it, rather than the baseline <span class="vera-inline-link" onclick="openMethodology()">VERA</span> assumes for titles with less data.</p>
+        <div class="synopsis-collapse" onclick="toggleEarned()" title="Collapse">▲</div>
+      </div>
+    </div>
+    `}
+
+    ${relatedEntriesSection(title)}
+  `;
+  wireLazyImages(document.getElementById('view-detail'));
+}
+
+function relatedEntriesSection(title) {
+  const relations = title.relations || [];
+  if (relations.length === 0) return '';
+
+  const rows = relations.map(rel => {
+    const isAnime = rel.type === 'anime';
+    const inVeraRecord = isAnime ? titlesById[rel.mal_id] : null;
+    const malUrl = rel.url || `https://myanimelist.net/${rel.type === 'manga' ? 'manga' : 'anime'}/${rel.mal_id}`;
+
+    const relThumb = (rel.image_small_url || rel.image_url)
+      ? thumbHtml(rel, 'related-thumb')
+      : (inVeraRecord ? thumbHtml(inVeraRecord, 'related-thumb') : placeholderHtml('related-thumb'));
+
+    // Score badge: only real data. If the related entry is in our own
+    // loaded VERA database, show its real VERA score. Otherwise we
+    // genuinely don't have one -- show its MAL score instead (also only
+    // if we actually have it, which we only do when it's in our
+    // database, since relations themselves carry no score field at all).
+    let scoreBadge = '';
+    if (inVeraRecord) {
+      const hasVera = inVeraRecord.vera_score !== null && inVeraRecord.vera_score !== undefined;
+      if (hasVera) {
+        scoreBadge = `<span class="related-score related-score-vera">${inVeraRecord.vera_score.toFixed(2)}</span>`;
+      } else if (inVeraRecord.mal_score != null) {
+        scoreBadge = `<span class="related-score related-score-mal">${inVeraRecord.mal_score}</span>`;
+      }
+    }
+
+    const rowClass = inVeraRecord ? 'related-row related-row-linked' : 'related-row related-row-external';
+    const rowClick = inVeraRecord ? `onclick="goDetail(${rel.mal_id})"` : '';
+
+    return `
+      <div class="${rowClass}" ${rowClick}>
+        <div class="related-thumb-cell">${relThumb}</div>
+        <div class="related-info">
+          <div class="related-relation">${rel.relation}</div>
+          <div class="related-name">${rel.name}</div>
+          <div class="related-type">${rel.type || ''}</div>
+        </div>
+        ${scoreBadge}
+        <div class="related-actions">
+          <a class="related-btn" href="${malUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">MAL ↗</a>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="detail-section">
+      <h2 class="collapsible-heading" id="related-toggle" onclick="toggleRelated()">Related Entries</h2>
+      <div class="related-panel" id="related-panel">
+        <div class="related-list">${rows}</div>
+        <div class="synopsis-collapse" onclick="toggleRelated()" title="Collapse">▲</div>
+      </div>
+    </div>
+  `;
+}
+
+function goDetail(malId) {
+  document.getElementById('view-list').style.display = 'none';
+  document.getElementById('view-detail').style.display = 'block';
+  renderDetail(malId);
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  disableScrollFade();
+}
+
+function scrollListToTop() {
+  // Deliberately does NOT touch currentPage or call renderPage -- this
+  // is a scroll-only action. Clicking it on page 5 must land back at
+  // the top of page 5's own content (same page, same data), not jump
+  // to page 1 -- it just scrolls up to reveal the VERA Rankings title
+  // and search bar at the top of the page.
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  const btn = document.getElementById('back-to-top-btn');
+  if (btn) {
+    btn.classList.remove('popping');
+    void btn.offsetWidth; // restart the animation even if clicked repeatedly
+    btn.classList.add('popping');
+  }
+}
+
+function goHome() {
+  document.getElementById('view-list').style.display = 'block';
+  document.getElementById('view-detail').style.display = 'none';
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  enableScrollFade();
+}
+
+function toggleRankMode() {
+  rankMode = rankMode === 'vera' ? 'mal' : 'vera';
+  const btn = document.getElementById('rank-mode-toggle');
+  if (btn) {
+    btn.classList.toggle('active', rankMode === 'mal');
+    btn.textContent = rankMode === 'mal' ? 'View: MAL rank' : 'View: VERA rank';
+    btn.title = rankMode === 'mal' ? "Showing MAL's ranking — click to switch back to VERA" : "Showing VERA's ranking — click to switch to MAL's ranking";
+  }
+  if (VERA_PAYLOAD) renderPage(1);
+}
+
+function titleMatches(t, query) {
+  if (t.title && t.title.toLowerCase().includes(query)) return true;
+  if (t.title_english && t.title_english.toLowerCase().includes(query)) return true;
+  if (Array.isArray(t.title_synonyms)) {
+    for (const syn of t.title_synonyms) {
+      if (syn && syn.toLowerCase().includes(query)) return true;
+    }
+  }
+  return false;
+}
+
+function handleSearchInput() {
+  const input = document.getElementById('search-input');
+  const resultsEl = document.getElementById('search-results');
+  const query = input.value.trim().toLowerCase();
+
+  if (!query) {
+    resultsEl.classList.remove('open');
+    resultsEl.innerHTML = '';
+    return;
+  }
+
+  const matches = VERA_PAYLOAD.titles
+    .filter(t => titleMatches(t, query))
+    .slice(0, 8);
+
+  if (matches.length === 0) {
+    resultsEl.innerHTML = `<div class="search-no-results">No titles match "${input.value}"</div>`;
+  } else {
+    resultsEl.innerHTML = matches.map(t => {
+      const isMalMode = rankMode === 'mal';
+      const isNA = isMalMode
+        ? (t.mal_score === null || t.mal_score === undefined)
+        : (t.vera_score === null || t.vera_score === undefined);
+      const year = t.aired_from ? t.aired_from.slice(0, 4) : '—';
+      const statusShort = t.status === 'Currently Airing' ? 'Airing' : 'Finished';
+      const clickAction = isNA ? '' : `onclick="selectSearchResult(${t.mal_id})"`;
+      const showEnglish = t.title_english && t.title_english !== t.title;
+      const scoreDisplay = isNA ? 'N/A' : (isMalMode ? t.mal_score.toFixed(2) : t.vera_score.toFixed(2));
+      return `
+        <div class="search-result-item" ${clickAction} style="${isNA ? 'cursor:default;opacity:0.5;' : ''}">
+          <div style="min-width:0;">
+            <div class="sr-title">${t.title}</div>
+            <div class="sr-meta">${showEnglish ? t.title_english + ' · ' : ''}${statusShort} · ${year}</div>
+          </div>
+          <div class="sr-score">${scoreDisplay}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  resultsEl.classList.add('open');
+}
+
+function selectSearchResult(malId) {
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-results').classList.remove('open');
+  document.getElementById('search-results').innerHTML = '';
+  goDetail(malId);
+}
+
+document.addEventListener('click', (e) => {
+  const wrap = document.querySelector('.search-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('search-results').classList.remove('open');
+  }
+});
+
+/* ---------- IndexedDB persistence ---------- */
+const DB_NAME = 'vera_db';
+const STORE_NAME = 'payload';
+const DB_KEY = 'current';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(STORE_NAME);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveToDB(payload) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(payload, DB_KEY);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function loadFromDB() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get(DB_KEY);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/* ---------- Loading a new database file ---------- */
+function validatePayload(raw) {
+  let payload = raw;
+  if (Array.isArray(raw)) {
+    payload = { pulled_at: new Date().toISOString(), title_count: raw.length, titles: raw };
+  }
+  if (!payload || typeof payload !== 'object' || !Array.isArray(payload.titles)) {
+    throw new Error('This file doesn\'t look like a VERA export (expected a "titles" list).');
+  }
+  if (payload.titles.length === 0) {
+    throw new Error('This file has zero titles.');
+  }
+  if (!payload.pulled_at) {
+    payload.pulled_at = new Date().toISOString();
+  }
+  payload.title_count = payload.titles.length;
+  return payload;
+}
+
+async function loadPayloadIntoSite(payload, statusEl) {
+  VERA_PAYLOAD = payload;
+  titlesById = {};
+  VERA_PAYLOAD.titles.forEach(t => titlesById[t.mal_id] = t);
+  try {
+    await saveToDB(payload);
+  } catch (err) {
+    console.error('IndexedDB save failed:', err);
+  }
+  document.getElementById('pull-date').textContent = formatPullDate(VERA_PAYLOAD.pulled_at);
+  showListView();
+  renderPage(1);
+  enableScrollFade();
+  if (statusEl) {
+    statusEl.textContent = `Loaded ${payload.title_count.toLocaleString('en-US')} titles.`;
+    statusEl.className = 'update-status success';
+  }
+}
+
+function handleFile(file, statusEl) {
+  if (!file) return;
+  if (statusEl) { statusEl.textContent = 'Reading file…'; statusEl.className = 'update-status'; }
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const raw = JSON.parse(e.target.result);
+      const payload = validatePayload(raw);
+      await loadPayloadIntoSite(payload, statusEl);
+      setTimeout(() => { closeUpdateModal(); }, 900);
+    } catch (err) {
+      if (statusEl) {
+        statusEl.textContent = 'Error: ' + err.message;
+        statusEl.className = 'update-status error';
+      }
+    }
+  };
+  reader.onerror = () => {
+    if (statusEl) {
+      statusEl.textContent = 'Could not read that file.';
+      statusEl.className = 'update-status error';
+    }
+  };
+  reader.readAsText(file);
+}
+
+function wireDropZone(zoneEl, inputEl, statusEl) {
+  zoneEl.addEventListener('click', () => inputEl.click());
+  inputEl.addEventListener('change', () => handleFile(inputEl.files[0], statusEl));
+  ['dragenter', 'dragover'].forEach(evt => {
+    zoneEl.addEventListener(evt, (e) => { e.preventDefault(); zoneEl.classList.add('drag-over'); });
+  });
+  ['dragleave', 'drop'].forEach(evt => {
+    zoneEl.addEventListener(evt, (e) => { e.preventDefault(); zoneEl.classList.remove('drag-over'); });
+  });
+  zoneEl.addEventListener('drop', (e) => {
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    handleFile(file, statusEl);
+  });
+}
+
+/* ---------- View switching ---------- */
+function showEmptyState() {
+  document.getElementById('view-empty').style.display = 'block';
+  document.getElementById('view-list').style.display = 'none';
+  document.getElementById('view-detail').style.display = 'none';
+}
+function showListView() {
+  document.getElementById('view-empty').style.display = 'none';
+  document.getElementById('view-list').style.display = 'block';
+}
+
+/* ---------- Update Database modal ---------- */
+function openUpdateModal() {
+  document.getElementById('update-status').textContent = '';
+  document.getElementById('update-status').className = 'update-status';
+  document.getElementById('update-modal').style.display = 'flex';
+}
+function closeUpdateModal() {
+  document.getElementById('update-modal').style.display = 'none';
+}
+
+/* ---------- Methodology modal ---------- */
+function openMethodology() {
+  document.getElementById('methodology-modal').style.display = 'flex';
+}
+function closeMethodology() {
+  document.getElementById('methodology-modal').style.display = 'none';
+  const input = document.getElementById('meth-search-input');
+  const results = document.getElementById('meth-search-results');
+  const breakdown = document.getElementById('meth-breakdown');
+  if (input) input.value = '';
+  if (results) { results.classList.remove('open'); results.innerHTML = ''; }
+  if (breakdown) { breakdown.classList.remove('open'); breakdown.innerHTML = ''; }
+}
+
+/* ---------- Version history ----------
+   Purely a record of the site's UI evolution -- layout, navigation,
+   and visual features. Deliberately says nothing about how VERA scores
+   are calculated; that lives only in the methodology modal. Each
+   preview is a small, self-contained HTML/CSS snippet approximating
+   what that stage looked like, not a live functional replica. */
+const VERA_HISTORY = [
+  {
+    label: 'v1',
+    title: 'Paginated rankings list',
+    desc: 'The first version of the site: a 50-per-page ranked list with title, status, year, and score, plus a weight bar showing how much of each score came from real completions.',
+    preview: `<div style="font-family:'JetBrains Mono',monospace;font-size:12px;">
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #2C3142;"><span style="color:#E8E4D9;">#1 Sousou no Frieren</span><span style="color:#4FB8A6;">9.21</span></div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #2C3142;"><span style="color:#E8E4D9;">#2 Fullmetal Alchemist: Brotherhood</span><span style="color:#4FB8A6;">9.12</span></div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;"><span style="color:#E8E4D9;">#3 Gintama: The Final</span><span style="color:#4FB8A6;">9.12</span></div>
+    </div>`
+  },
+  {
+    label: 'v2',
+    title: 'N/A handling for thin titles',
+    desc: 'Titles below a minimum member floor started showing N/A instead of a misleading score, sorted by member count at the bottom of the list rather than mixed into the ranking.',
+    preview: `<div style="font-family:'JetBrains Mono',monospace;font-size:12px;opacity:0.55;display:flex;justify-content:space-between;"><span style="color:#E8E4D9;">— Obscure OVA</span><span style="color:#4A4638;">N/A</span></div>`
+  },
+  {
+    label: 'v3',
+    title: 'Detail pages and dual titles',
+    desc: 'Added a per-title detail page, and English subtitles shown under the main Japanese title everywhere they differ, matching how MyAnimeList itself displays dual titles.',
+    preview: `<div style="font-family:'Fraunces',serif;">
+      <div style="font-size:20px;color:#E8E4D9;">Sousou no Frieren</div>
+      <div style="font-size:12px;font-family:Inter,sans-serif;color:#9B9689;">Frieren: Beyond Journey's End</div>
+    </div>`
+  },
+  {
+    label: 'v4',
+    title: 'Live search',
+    desc: 'A search box that matches Japanese titles, English titles, and synonyms together — searching an English name finds a Japanese-titled entry and vice versa.',
+    preview: `<input readonly value="Search titles…" style="font-family:'JetBrains Mono',monospace;font-size:11px;width:100%;background:#1D212C;border:1px solid #2C3142;border-radius:6px;padding:8px 12px;color:#5C594F;box-sizing:border-box;">`
+  },
+  {
+    label: 'v5',
+    title: 'Self-saving local database',
+    desc: 'The site became self-contained: drop a data export in once, it saves itself in your browser automatically, with a small button to load a fresh one anytime without re-dropping every visit.',
+    preview: `<div style="text-align:center;font-family:'JetBrains Mono',monospace;">
+      <div style="border:2px dashed #2C3142;border-radius:12px;padding:24px;color:#5C594F;font-size:12px;">⇪ Drop a database file here</div>
+    </div>`
+  },
+  {
+    label: 'v6',
+    title: 'Related Entries panel',
+    desc: "Detail pages gained a Related Entries section — sequels, prequels, side stories, and source manga — each linking straight to that title's own page when it's in the database, or out to MyAnimeList when it isn't.",
+    preview: `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;">
+      <div style="background:#1D212C;border:1px solid #2C3142;border-radius:8px;padding:10px;color:#9B9689;">Sousou no Frieren 2nd Season · Sequel</div>
+    </div>`
+  },
+  {
+    label: 'v7',
+    title: 'Expandable synopsis',
+    desc: 'A collapsible Synopsis section on the detail page, closed by default to keep the page compact, expanding smoothly when opened.',
+    preview: `<div style="display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:11px;background:#1D212C;border:1px solid #4FB8A6;border-radius:999px;padding:6px 12px;color:#4FB8A6;">+ Synopsis</div>`
+  },
+  {
+    label: 'v8',
+    title: 'Cover art, lazily loaded',
+    desc: 'Cover images appeared throughout the site — list rows, the detail page, and Related Entries — only downloading as each image actually scrolls into view, not all at once.',
+    preview: `<div style="display:flex;gap:8px;"><div style="width:36px;height:36px;background:#232838;"></div><div style="width:36px;height:36px;background:#232838;"></div><div style="width:36px;height:36px;background:#232838;"></div></div>`
+  },
+  {
+    label: 'v9',
+    title: 'Season-colored release years',
+    desc: "Each title's release year became color-coded by the season it aired — winter blue, spring pink, summer amber, fall orange — so the year itself signals when a title released at a glance.",
+    preview: `<div style="font-family:'JetBrains Mono',monospace;font-size:12px;display:flex;gap:10px;">
+      <span style="color:#D97B2E;font-weight:600;">Fall</span>
+      <span style="color:#6FA8DC;font-weight:600;">Winter</span>
+      <span style="color:#E8A0C4;font-weight:600;">Spring</span>
+      <span style="color:#E8934A;font-weight:600;">Summer</span>
+    </div>`
+  },
+  {
+    label: 'v10',
+    title: 'Member/vote terminology corrected',
+    desc: 'What the site called "votes" was actually the count of people with a title on their list in any status — corrected to "members" throughout, matching what the number actually represents.',
+    preview: `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#9B9689;">1,494,567 members</div>`
+  },
+  {
+    label: 'v11',
+    title: 'Collapsible detail sections',
+    desc: '"How earned is this score" and Related Entries became click-to-expand pill tabs with a clear +/− icon, instead of always-visible blocks taking up space.',
+    preview: `<div style="display:inline-flex;align-items:center;gap:8px;font-family:'Fraunces',serif;font-size:14px;background:#1D212C;border:1px solid #2C3142;border-radius:999px;padding:8px 14px;color:#E8E4D9;">How earned is this score <span style="width:18px;height:18px;border-radius:50%;background:#2E7A6E;color:#12151C;display:inline-flex;align-items:center;justify-content:center;font-size:12px;">+</span></div>`
+  },
+  {
+    label: 'v12',
+    title: 'Color-coded stats panel',
+    desc: 'A "What are you thinking?" panel breaking down Completed, Watching, On Hold, Dropped, and Plan to Watch — each tinted to match its meaning instead of one flat color.',
+    preview: `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;display:flex;gap:10px;">
+      <span style="color:#4FB8A6;">Completed</span><span style="color:#D9A441;">Watching</span><span style="color:#C9695B;">Dropped</span>
+    </div>`
+  },
+  {
+    label: 'v13',
+    title: 'Scroll focus effect',
+    desc: 'Rows respond to scrolling — the row nearest the center of the screen grows slightly and stays fully visible, while rows further away fade and shrink toward the edges.',
+    preview: `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;">
+      <div style="opacity:0.4;transform:scale(0.92);padding:6px 0;color:#9B9689;">#4 — smaller, dimmer</div>
+      <div style="opacity:1;transform:scale(1.06);padding:8px 0;color:#E8E4D9;font-weight:700;">#5 — centered, in focus</div>
+      <div style="opacity:0.4;transform:scale(0.92);padding:6px 0;color:#9B9689;">#6 — smaller, dimmer</div>
+    </div>`
+  },
+  {
+    label: 'v14',
+    title: 'Fish-eye perspective effect',
+    desc: 'The scroll effect gained real 3D depth — rows above and below center tilt in opposite directions and push back in space, curving around the perfectly flat, focused center row like a wide lens.',
+    preview: `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#9B9689;">rows now rotate + recede in 3D around the focal center</div>`
+  },
+  {
+    label: 'v15',
+    title: 'Hover pop and color shift',
+    desc: 'Hovering a row now pops it slightly larger and brightens its title, score, and member text — while deliberately leaving the season-colored year untouched.',
+    preview: `<div style="font-family:'Fraunces',serif;font-size:15px;color:#FFFDF7;">Sousou no Frieren <span style="font-size:11px;color:#9B9689;">(hovered)</span></div>`
+  },
+  {
+    label: 'v16',
+    title: 'VERA / MAL ranking toggle',
+    desc: "A toggle button next to search flips the entire list — order, rank numbers, and scores — between VERA's ranking and MyAnimeList's own ranking.",
+    preview: `<div style="display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:#4FB8A6;background:#1D212C;border:1.5px solid #2E7A6E;border-radius:999px;padding:7px 14px;">⇄ View: MAL rank</div>`
+  },
+  {
+    label: 'v17',
+    title: 'Floating back-to-top button',
+    desc: "A circular button appears once you've scrolled down, popping with a bounce animation on click and scrolling back to the top of the page without changing which page of results you're on.",
+    preview: `<div style="width:40px;height:40px;border-radius:50%;background:#4FB8A6;color:#12151C;display:flex;align-items:center;justify-content:center;font-weight:700;">↑</div>`
+  },
+  {
+    label: 'v18',
+    title: 'Redesigned methodology page',
+    desc: 'The "how scores are calculated" page was rebuilt with real visual structure — variable cards, icon-labeled protections — plus a live search where you can look up any of the 15,200 titles and see its own real breakdown.',
+    preview: `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#9B9689;">Try it on a real title → search box + live breakdown</div>`
+  },
+  {
+    label: 'v19',
+    title: 'This History &amp; Credits panel',
+    desc: "Separated into two footer links — History for the site's version timeline, Credits for the real data sources and APIs this project relies on.",
+    preview: `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#9B9689;">You're looking at it.</div>`
+  },
+];
+
+function renderHistoryList() {
+  const listEl = document.getElementById('hist-version-list');
+  if (!listEl) return;
+  listEl.innerHTML = VERA_HISTORY.map((v, i) => `
+    <div class="hist-version-row">
+      <div class="hist-version-top">
+        <span class="hist-version-label">${v.label}</span>
+        <span class="hist-version-title">${v.title}</span>
+        <button class="hist-version-view-btn" onclick="toggleHistoryPreview(${i})" id="hist-view-btn-${i}">View</button>
+      </div>
+      <div class="hist-version-desc">${v.desc}</div>
+      <div class="hist-version-preview" id="hist-preview-${i}">
+        <div class="hist-version-preview-inner">${v.preview}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleHistoryPreview(i) {
+  const panel = document.getElementById(`hist-preview-${i}`);
+  const btn = document.getElementById(`hist-view-btn-${i}`);
+  if (!panel) return;
+  const isOpen = panel.classList.toggle('open');
+  if (btn) btn.textContent = isOpen ? 'Hide' : 'View';
+}
+
+function openHistory() {
+  renderHistoryList();
+  document.getElementById('history-modal').style.display = 'flex';
+}
+function closeHistory() {
+  document.getElementById('history-modal').style.display = 'none';
+}
+function openCredits() {
+  document.getElementById('credits-modal').style.display = 'flex';
+}
+function closeCredits() {
+  document.getElementById('credits-modal').style.display = 'none';
+}
+
+function handleMethSearchInput() {
+  const input = document.getElementById('meth-search-input');
+  const resultsEl = document.getElementById('meth-search-results');
+  const query = input.value.trim().toLowerCase();
+
+  if (!query || !VERA_PAYLOAD) {
+    resultsEl.classList.remove('open');
+    resultsEl.innerHTML = '';
+    return;
+  }
+
+  const matches = VERA_PAYLOAD.titles.filter(t => titleMatches(t, query)).slice(0, 6);
+
+  if (matches.length === 0) {
+    resultsEl.innerHTML = `<div class="search-no-results">No titles match "${input.value}"</div>`;
+  } else {
+    resultsEl.innerHTML = matches.map(t => `
+      <div class="search-result-item" onclick="showMethBreakdown(${t.mal_id})">
+        <div style="min-width:0;">
+          <div class="sr-title">${t.title}</div>
+          <div class="sr-meta">${formatNum(t.total_entries)} members</div>
+        </div>
+      </div>
+    `).join('');
+  }
+  resultsEl.classList.add('open');
+}
+
+function showMethBreakdown(malId) {
+  const t = titlesById[malId];
+  const breakdown = document.getElementById('meth-breakdown');
+  const input = document.getElementById('meth-search-input');
+  const resultsEl = document.getElementById('meth-search-results');
+  if (!t || !breakdown) return;
+
+  input.value = t.title;
+  resultsEl.classList.remove('open');
+  resultsEl.innerHTML = '';
+
+  const isNA = t.vera_score === null || t.vera_score === undefined;
+  const completed = t.completed || 0;
+  const total = t.total_entries || 0;
+  const earnedPct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  let explainer;
+  if (isNA) {
+    explainer = `This title has ${formatNum(total)} members — under VERA's 100-member floor, so there isn't enough data yet for a meaningful score. It's listed, sorted by member count, but left out of the numbered ranking until it earns more real opinions.`;
+  } else if (earnedPct >= 70) {
+    explainer = `${formatNum(completed)} people have actually completed this title out of ${formatNum(total)} total members — that's ${earnedPct}% real, finished opinions. With that much real data, VERA trusts this title's own votes almost entirely, barely leaning on the baseline at all.`;
+  } else if (earnedPct >= 30) {
+    explainer = `${formatNum(completed)} of this title's ${formatNum(total)} members have completed it (${earnedPct}%). That's a solid amount of real opinion, but VERA still blends in some of the database-wide baseline to stay cautious against hype or a still-forming reputation.`;
+  } else {
+    explainer = `Only ${earnedPct}% of this title's ${formatNum(total)} members (${formatNum(completed)} people) have actually completed it — most of the rest are still watching, on a backlog, or undecided. VERA leans heavily on the baseline here rather than trusting a still-thin set of real opinions.`;
+  }
+
+  const airingNote = t.status === 'Currently Airing'
+    ? `<div class="meth-breakdown-note">This title is currently airing, so it also carries a fading caution penalty until more of its audience finishes it.</div>`
+    : '';
+
+  breakdown.innerHTML = `
+    <div class="meth-breakdown-header">
+      <div class="meth-breakdown-title">${t.title}</div>
+      <div class="meth-breakdown-scores">
+        <div class="meth-breakdown-score-item">
+          <div class="meth-breakdown-score-label">VERA</div>
+          <div class="meth-breakdown-score-value ${isNA ? 'na' : ''}">${isNA ? 'N/A' : t.vera_score.toFixed(2)}</div>
+        </div>
+        <div class="meth-breakdown-score-item">
+          <div class="meth-breakdown-score-label">MAL</div>
+          <div class="meth-breakdown-score-value mal">${t.mal_score != null ? t.mal_score.toFixed(2) : '—'}</div>
+        </div>
+      </div>
+    </div>
+    <div class="meth-weight-track"><div class="meth-weight-fill" style="width:${earnedPct}%"></div></div>
+    <div class="meth-weight-caption">${earnedPct}% earned from real completions</div>
+    <p class="meth-explainer">${explainer}</p>
+    ${airingNote}
+  `;
+  breakdown.classList.add('open');
+}
+
+async function init() {
+  wireDropZone(document.getElementById('drop-zone'), document.getElementById('file-input'), null);
+  wireDropZone(document.getElementById('modal-drop-zone'), document.getElementById('modal-file-input'), document.getElementById('update-status'));
+
+  try {
+    const saved = await loadFromDB();
+    if (saved && saved.titles && saved.titles.length) {
+      VERA_PAYLOAD = saved;
+      titlesById = {};
+      VERA_PAYLOAD.titles.forEach(t => titlesById[t.mal_id] = t);
+      document.getElementById('pull-date').textContent = formatPullDate(VERA_PAYLOAD.pulled_at);
+      showListView();
+      renderPage(1);
+      enableScrollFade();
+      return;
+    }
+  } catch (err) {
+    console.error('IndexedDB load failed:', err);
+  }
+  showEmptyState();
+}
+
+init();
+</script>
+
+</body>
+</html>
